@@ -1,7 +1,7 @@
 package types
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,16 +9,11 @@ import (
 	"strings"
 )
 
-const (
-	maxHashSize = (sha512.Size / 2) + len("sha512-")
-)
-
 // Hash encodes a hash specified in a string of the form:
 //    "<type>-<value>"
 // for example
-//    "sha512-06c733b1838136838e6d2d3e8fa5aea4c7905e92[...]"
-// Valid types are currently:
-//  * sha512
+//    "sha256-06c733b1838136838e6d2d3e8fa5aea4c7905e92"
+// Valid types are currently "sha256"
 type Hash struct {
 	typ string
 	Val string
@@ -57,7 +52,7 @@ func (h Hash) Empty() bool {
 
 func (h Hash) assertValid() error {
 	switch h.typ {
-	case "sha512":
+	case "sha256":
 	case "":
 		return fmt.Errorf("unexpected empty hash type")
 	default:
@@ -89,16 +84,9 @@ func (h Hash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(h.String())
 }
 
-func NewHashSHA512(b []byte) *Hash {
-	h := sha512.New()
+func NewHashSHA256(b []byte) *Hash {
+	h := sha256.New()
 	h.Write(b)
-	nh, _ := NewHash(fmt.Sprintf("sha512-%x", h.Sum(nil)))
+	nh, _ := NewHash(fmt.Sprintf("sha256-%x", h.Sum(nil)))
 	return nh
-}
-
-func ShortHash(hash string) string {
-	if len(hash) > maxHashSize {
-		return hash[:maxHashSize]
-	}
-	return hash
 }
