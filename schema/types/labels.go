@@ -95,3 +95,12 @@ func (l Labels) Get(name string) (val string, ok bool) {
 	}
 	return "", false
 }
+
+func (l *Labels) Set(name string, val string) error {
+	lbl, err := NewLabel(name, val)
+	if err != nil {
+		return err
+	}
+	*l = append(*l, *lbl)
+	return nil
+}
