@@ -17,12 +17,20 @@ const (
 
 type App struct {
 	Name   types.ACName
-	Labels map[string]string
+	Labels types.Labels
 }
 
-func NewApp(name string, labels map[string]string) (*App, error) {
-	if labels == nil {
-		labels = make(map[string]string, 0)
+func NewApp(name string, labelsMap map[string]string) (*App, error) {
+	labels := types.Labels{}
+
+	if labelsMap != nil {
+		for n, v := range labelsMap {
+			l, err := types.NewLabel(n, v)
+			if err != nil {
+				return nil, err
+			}
+			labels = append(labels, *l)
+		}
 	}
 	acn, err := types.NewACName(name)
 	if err != nil {
