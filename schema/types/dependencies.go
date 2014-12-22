@@ -9,7 +9,7 @@ type Dependencies []Dependency
 
 type Dependency struct {
 	App     ACName `json:"app"`
-	ImageID Hash   `json:"imageID"`
+	ImageID Hash   `json:"imageID,omitempty"`
 	Labels  Labels `json:"labels"`
 }
 
@@ -25,6 +25,17 @@ func (d Dependency) assertValid() error {
 func (d Dependency) MarshalJSON() ([]byte, error) {
 	if err := d.assertValid(); err != nil {
 		return nil, err
+	}
+
+	if d.ImageID.Empty() {
+		return json.Marshal(struct {
+			dependency
+			// Override ImageID with an empty value so it won't be marshalled
+			ImageID bool `json:"imageID,omitempty"`
+		}{
+			dependency: dependency(d),
+		})
+
 	}
 	return json.Marshal(dependency(d))
 }
