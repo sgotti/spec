@@ -124,22 +124,32 @@ type XzReader struct {
 // XzReader shells out to a command line xz executable (if
 // available) to decompress the given io.Reader using the xz
 // compression format
-func XzReader(r io.Reader) io.ReadCloser {
+func NewXzReader(r io.Reader) (*XzReader, error) {
 	rpipe, wpipe := io.Pipe()
 	ex, err := exec.LookPath("xz")
 	if err != nil {
 		log.Fatalf("couldn't find xz executable: %v", err)
 	}
 	cmd := exec.Command(ex, "--decompress", "--stdout")
+
+	closech := make(chan error)
+
 	cmd.Stdin = r
 	cmd.Stdout = wpipe
 
 	go func() {
 		err := cmd.Run()
 		wpipe.CloseWithError(err)
+		closech <- err
 	}()
 
-	return rpipe
+	return &XzReader{rpipe, cmd, closech}, nil
+}
+
+func (r *XzReader) Close() error {
+	r.ReadCloser.Close()
+	r.cmd.Process.Kill()
+	return <-r.closech
 }
 
 // ManifestFromImage extracts a new schema.ImageManifest from the given ACI image.
