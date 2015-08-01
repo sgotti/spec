@@ -103,6 +103,24 @@ func DetectFileType(r io.Reader) (FileType, error) {
 	}
 }
 
+// readCloser wraps and io.Reader to also implement io.Closer
+type readCloser struct {
+	io.Reader
+}
+
+// Close does nothing.
+func (r *readCloser) Close() error { return nil }
+
+func newReadCloser(r io.Reader) *readCloser {
+	return &readCloser{r}
+}
+
+type XzReader struct {
+	io.ReadCloser
+	cmd     *exec.Cmd
+	closech chan error
+}
+
 // XzReader shells out to a command line xz executable (if
 // available) to decompress the given io.Reader using the xz
 // compression format
@@ -132,6 +150,7 @@ func ManifestFromImage(rs io.ReadSeeker) (*schema.ImageManifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer tr.Close()
 
 	for {
 		hdr, err := tr.Next()
@@ -155,20 +174,31 @@ func ManifestFromImage(rs io.ReadSeeker) (*schema.ImageManifest, error) {
 	}
 }
 
+type CompressedTarReader struct {
+	*tar.Reader
+	cr io.ReadCloser
+}
+
 // NewCompressedTarReader creates a new tar.Reader reading from the given ACI image.
-func NewCompressedTarReader(rs io.ReadSeeker) (*tar.Reader, error) {
+// It is the caller's responsibility to call Close on the Reader when done.
+func NewCompressedTarReader(rs io.ReadSeeker) (*CompressedTarReader, error) {
 	cr, err := NewCompressedReader(rs)
 	if err != nil {
 		return nil, err
 	}
-	return tar.NewReader(cr), nil
+	return &CompressedTarReader{tar.NewReader(cr), cr}, nil
+}
+
+func (r *CompressedTarReader) Close() error {
+	return r.cr.Close()
 }
 
 // NewCompressedReader creates a new io.Reader from the given ACI image.
-func NewCompressedReader(rs io.ReadSeeker) (io.Reader, error) {
+// It is the caller's responsibility to call Close on the Reader when done.
+func NewCompressedReader(rs io.ReadSeeker) (io.ReadCloser, error) {
 
 	var (
-		dr  io.Reader
+		dr  io.ReadCloser
 		err error
 	)
 
@@ -194,11 +224,14 @@ func NewCompressedReader(rs io.ReadSeeker) (io.Reader, error) {
 			return nil, err
 		}
 	case TypeBzip2:
-		dr = bzip2.NewReader(rs)
+		dr = newReadCloser(bzip2.NewReader(rs))
 	case TypeXz:
-		dr = XzReader(rs)
+		dr, err = NewXzReader(rs)
+		if err != nil {
+			return nil, err
+		}
 	case TypeTar:
-		dr = rs
+		dr = newReadCloser(rs)
 	case TypeUnknown:
 		return nil, errors.New("error: unknown image filetype")
 	default:
